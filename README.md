@@ -1,151 +1,185 @@
-# OpenClaw Agent
+# openclaw-ecommerce
 
-AI agent for e-commerce stores. Monitors orders, inventory, support & marketing 24/7.
-Powered by Claude (Anthropic). Delivers to WhatsApp, Telegram, or Slack.
+E-commerce skills pack for [OpenClaw](https://openclaw.dev).
 
----
-
-## What it does
-
-| Job | Schedule | What it sends |
-|---|---|---|
-| `daily-briefing` | Every day at 8 AM | Revenue, orders, AOV, refund rate, top products |
-| `order-scan` | Every 30 min | Flags high-value or unusual orders |
-| `stock-monitor` | Every hour | Alerts when SKUs drop below reorder threshold |
-| `refund-monitor` | Every hour | Detects refund spikes on specific products |
+Gives your OpenClaw agent live access to Shopify, WooCommerce, and Klaviyo.
+Ask it anything. It pulls the real data.
 
 ---
 
-## Setup (per client)
+## What this is
 
-### 1. Clone the repo into a client folder
+This is **not** a standalone agent. It's a skills pack that plugs into the OpenClaw framework.
+
+OpenClaw handles everything else:
+- The Claude connection (via your Claude Pro/Max account — no API key billing)
+- Scheduling and memory (via the QMD skill)
+- Delivery to WhatsApp, Telegram, Slack
+- Conversation and reasoning
+
+This repo provides the **data tools** — the functions OpenClaw calls when you ask store questions.
+
+---
+
+## Skills included
+
+| Skill | Tools | What you can ask |
+|-------|-------|-----------------|
+| `skills/shopify.js` | `getDailyRevenue`, `scanRecentOrders`, `checkInventory`, `checkRefunds`, `getStoreInfo` | Revenue, orders, stock, refund spikes |
+| `skills/woocommerce.js` | `getDailyRevenue`, `scanRecentOrders`, `checkInventory` | Same for WooCommerce stores |
+| `skills/klaviyo.js` | `getWeeklySummary`, `getRecentCampaigns` | Email campaign performance |
+
+---
+
+## Repo structure
+
+```
+openclaw-ecommerce/
+├── skills/
+│   ├── shopify.js            ← Shopify skill tools
+│   ├── woocommerce.js        ← WooCommerce skill tools
+│   └── klaviyo.js            ← Klaviyo skill tools
+├── connectors/
+│   ├── shopify.js            ← Shopify Admin REST API
+│   ├── woocommerce.js        ← WooCommerce REST API v3
+│   └── klaviyo.js            ← Klaviyo API
+├── templates/
+│   ├── SOUL.md               ← Agent personality for e-commerce
+│   ├── USER.md               ← Store owner context template
+│   └── MEMORY.md             ← Long-term memory template
+├── setup/
+│   ├── 1-mac-mini.md         ← Hardware setup & remote access
+│   ├── 2-openclaw-install.md ← OpenClaw install guide
+│   ├── 3-client-onboarding.md ← Per-client setup guide
+│   └── 4-ecommerce-skills.md ← Skills reference & prompts cheat sheet
+├── utils/
+│   ├── logger.js             ← Timestamped logger
+│   └── state.js              ← File-based JSON state
+└── .env.example              ← All required credentials
+```
+
+---
+
+## Setup
+
+**Prerequisites:** OpenClaw installed and running (`npm install -g openclaw`)
+
+### 1. Clone this repo
 
 ```bash
-mkdir -p ~/openclaw/clients
-git clone https://github.com/mustyscale/openclaw-agent ~/openclaw/clients/CLIENTNAME
-cd ~/openclaw/clients/CLIENTNAME
+git clone https://github.com/mustyscale/openclaw-ecommerce
+cd openclaw-ecommerce
 npm install
 ```
 
-### 2. Create their `.env`
+### 2. Create your `.env`
 
 ```bash
 cp .env.example .env
-nano .env   # fill in their credentials
+nano .env
 ```
 
-Minimum required:
-- `ANTHROPIC_API_KEY`
-- `SHOPIFY_STORE_URL` + `SHOPIFY_ACCESS_TOKEN` (or WooCommerce equivalents)
-- At least one delivery channel: `WHATSAPP_ENABLED=true` or `TELEGRAM_ENABLED=true`
+Fill in the credentials for the platform(s) you use.
 
-### 3. Test each job manually
+### 3. Copy the context templates to OpenClaw
 
 ```bash
-node jobs/daily-briefing.js   # should send a WhatsApp/Telegram message
-node jobs/stock-monitor.js    # check inventory levels
-node jobs/order-scan.js       # scan recent orders
-node jobs/refund-monitor.js   # check for refund spikes
+cp templates/SOUL.md ~/.openclaw/SOUL.md
+cp templates/USER.md ~/.openclaw/USER.md
+cp templates/MEMORY.md ~/.openclaw/MEMORY.md
 ```
 
-### 4. Start with PM2
+Fill in the placeholders in each file (especially `USER.md`).
+
+### 4. Test your connections
 
 ```bash
-pm2 start index.js --name "openclaw-CLIENTNAME"
-pm2 save   # persists across reboots
+npm run test:shopify
+npm run test:woocommerce
+npm run test:klaviyo
 ```
 
-### 5. Verify it's running
+Expected output:
+```
+✅ Shopify skill OK
+```
+
+### 5. Register the skills with OpenClaw
+
+In your OpenClaw config, point to the skills you need:
+```json
+{
+  "skills": [
+    "~/openclaw-ecommerce/skills/shopify.js"
+  ]
+}
+```
+
+### 6. Start talking to it
 
 ```bash
-pm2 status
-pm2 logs openclaw-CLIENTNAME --lines 30
+openclaw chat
+```
+
+```
+> What did we make yesterday?
+> Any low stock I should worry about?
+> Check for refund spikes in the last 2 hours
+> Give me my Klaviyo weekly summary
 ```
 
 ---
 
-## Running multiple clients
+## Credentials needed
 
-Add each client to `ecosystem.config.js`, then:
+| Platform | Variables |
+|----------|-----------|
+| Shopify | `SHOPIFY_STORE_URL`, `SHOPIFY_ACCESS_TOKEN` |
+| WooCommerce | `WOOCOMMERCE_URL`, `WOOCOMMERCE_CONSUMER_KEY`, `WOOCOMMERCE_CONSUMER_SECRET` |
+| Klaviyo | `KLAVIYO_API_KEY` |
 
-```bash
-pm2 start ecosystem.config.js
-pm2 save
-```
+Thresholds (optional — sensible defaults built in):
 
-Each client runs as an isolated PM2 process with its own `.env`.
-
----
-
-## Shopify API Setup
-
-1. Shopify Admin → Settings → Apps → Develop apps → Create an app
-2. Configure Admin API scopes: `read_orders`, `read_products`, `read_inventory`, `read_customers`
-3. Install the app → copy the **Admin API access token**
-4. Paste into `.env` as `SHOPIFY_ACCESS_TOKEN`
-
-## WooCommerce API Setup
-
-1. WooCommerce → Settings → Advanced → REST API → Add key
-2. Permissions: **Read**
-3. Copy Consumer Key + Consumer Secret into `.env`
-
-## WhatsApp Setup (Twilio)
-
-1. Create account at [twilio.com](https://twilio.com)
-2. Console → Messaging → Try it out → Send a WhatsApp message
-3. Follow sandbox activation (client texts "join <word>" once)
-4. Copy `Account SID`, `Auth Token` into `.env`
-5. `TWILIO_WHATSAPP_FROM=whatsapp:+14155238886` (sandbox number)
-6. `WHATSAPP_TO=whatsapp:+CLIENT_NUMBER`
-
-## Telegram Setup (free)
-
-1. Open Telegram → message `@BotFather`
-2. `/newbot` → follow prompts → copy token
-3. Start a chat with the bot (client messages it once)
-4. Visit `https://api.telegram.org/bot<TOKEN>/getUpdates`
-5. Copy `chat_id` from the response
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `HIGH_VALUE_ORDER_THRESHOLD` | 500 | Flag orders above this value |
+| `LOW_STOCK_THRESHOLD` | 20 | Flag inventory below this unit count |
+| `REFUND_SPIKE_COUNT` | 5 | Alert if N+ refunds on same product |
+| `REFUND_SPIKE_WINDOW_HOURS` | 2 | ...within this many hours |
 
 ---
 
-## Remote Management (Tailscale)
+## Full setup guides
 
-```bash
-# On the Mac Mini
-brew install tailscale && sudo tailscale up
+Setting this up on a Mac Mini for a client? Read the guides in order:
 
-# From anywhere
-ssh client@<tailscale-ip>
-pm2 logs openclaw-CLIENTNAME
-pm2 restart openclaw-CLIENTNAME
-```
+1. [Mac Mini hardware & remote access](setup/1-mac-mini.md)
+2. [OpenClaw installation](setup/2-openclaw-install.md)
+3. [Client onboarding](setup/3-client-onboarding.md)
+4. [Skills reference & prompts cheat sheet](setup/4-ecommerce-skills.md)
 
 ---
 
-## Project Structure
+## What the agent sounds like
 
-```
-openclaw-agent/
-├── index.js                  ← PM2 entry point, starts all schedulers
-├── ecosystem.config.js       ← Multi-client PM2 config
-├── jobs/
-│   ├── daily-briefing.js     ← 8 AM revenue summary
-│   ├── order-scan.js         ← every 30 min order check
-│   ├── stock-monitor.js      ← hourly stock level check
-│   └── refund-monitor.js     ← hourly refund spike detection
-├── connectors/
-│   ├── shopify.js            ← Shopify Admin API
-│   ├── woocommerce.js        ← WooCommerce REST API
-│   └── klaviyo.js            ← Klaviyo API
-├── delivery/
-│   ├── index.js              ← routes to all enabled channels
-│   ├── whatsapp.js           ← Twilio WhatsApp
-│   ├── telegram.js           ← Telegram Bot API
-│   └── slack.js              ← Slack Webhooks
-├── ai/
-│   └── claude.js             ← Anthropic Claude (all AI calls)
-└── utils/
-    ├── logger.js             ← timestamped, PM2-friendly logging
-    └── state.js              ← JSON file state (seen orders, alerted SKUs)
-```
+**Morning briefing** (`"Morning briefing"`):
+> Revenue: £1,842 yesterday — 23 orders. AOV £80.
+> Refund rate: 2.1%. One high-value order: #1042 (£620).
+> Inventory: 3 SKUs below threshold. SKU-2291 has 8 units — 3 days left at current rate. Reorder now.
+> Klaviyo: Tuesday campaign hit 38% open rate. Best this month.
+
+**Refund check** (`"Any refund spikes today?"`):
+> Rose Body Butter 200ml — 6 refunds in the last 2 hours. Threshold is 5.
+> Worth checking: is this the same batch? Last time this happened it was a seal issue.
+
+**Inventory** (`"What's running low?"`):
+> 3 SKUs below your 20-unit threshold:
+> SKU-2291: 8 units (3 days)
+> SKU-1140: 14 units (6 days)
+> SKU-0892: 19 units (borderline — watch it)
+
+---
+
+## License
+
+MIT
