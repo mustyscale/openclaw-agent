@@ -1,183 +1,165 @@
 # Setup Guide 3 — Client Onboarding
 
-This guide covers filling in the context files and configuring the agent for a specific client.
-Do this after completing Guides 1 and 2.
+One client = one `.env` file + filled-in context templates.
+Everything else (OpenClaw, skills repo, PM2) is already set up from Guide 2.
 
-Budget 30 minutes per client. Most of it is filling in files and getting API credentials.
-
----
-
-## What You're Doing
-
-You're personalising the agent for this specific store.
-The three context files tell OpenClaw:
-- **SOUL.md** — how to behave (tone, priorities, communication style)
-- **USER.md** — who the owner is, what the store sells, what needs attention
-- **MEMORY.md** — what the agent learns and remembers over time
+Budget 30 minutes per client.
 
 ---
 
-## Step 1 — Fill in SOUL.md
+## 1. Create the Client's .env
 
-The default SOUL.md template is already written for e-commerce.
-You usually don't need to change it.
+The skills repo reads credentials from `.env`. Each client gets their own copy.
 
-Only edit it if:
-- The owner speaks a language other than English → add that at the top
-- The owner has a specific communication quirk they want respected
-- You're doing a white-label deployment with a custom agent name
+```bash
+cd ~/openclaw/skills/ecommerce
+cp .env.example .env
+nano .env
+```
 
+Fill in everything that applies:
+
+```env
+# Store — fill in whichever platform they use
+SHOPIFY_STORE_URL=brandname.myshopify.com
+SHOPIFY_ACCESS_TOKEN=shpat_...
+
+WOOCOMMERCE_URL=https://their-store.com
+WOOCOMMERCE_CONSUMER_KEY=ck_...
+WOOCOMMERCE_CONSUMER_SECRET=cs_...
+
+# Email (optional)
+KLAVIYO_API_KEY=pk_...
+
+# Delivery — pick whichever channel the client prefers
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_CHAT_ID=...
+
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=...
+TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+TWILIO_WHATSAPP_TO=whatsapp:+[client-number]
+
+SLACK_WEBHOOK_URL=https://hooks.slack.com/...
+
+# Thresholds — match what they told you in the onboarding call
+HIGH_VALUE_ORDER_THRESHOLD=500
+LOW_STOCK_THRESHOLD=20
+REFUND_SPIKE_COUNT=5
+REFUND_SPIKE_WINDOW_HOURS=2
+
+# Timezone
+TIMEZONE=Europe/London
+```
+
+**Never commit `.env` to git. It stays on the Mac Mini only. Back it up to your password manager.**
+
+---
+
+## 2. Get the API Credentials
+
+### Shopify
+
+1. `[store].myshopify.com/admin/settings/apps` → Develop apps → Create app
+2. Name: `OpenClaw Agent`
+3. Admin API scopes: `read_orders`, `read_products`, `read_inventory`, `read_customers`
+4. Install app → copy the **Admin API access token** (shown once only)
+
+### WooCommerce
+
+1. `WP Admin → WooCommerce → Settings → Advanced → REST API` → Add key
+2. Description: `OpenClaw Agent` — Permissions: **Read**
+3. Copy Consumer Key + Consumer Secret (shown once only)
+
+### Klaviyo (optional)
+
+1. `Klaviyo → Account → Settings → API Keys` → Create Private API Key
+2. Name: `OpenClaw Agent` — Scopes: Read (Campaigns + Metrics)
+
+### Telegram bot (recommended — easiest for clients)
+
+1. Message `@BotFather` on Telegram → `/newbot`
+2. Name: e.g. `LotionLab Agent` — Username: e.g. `lotionlab_agent_bot`
+3. Copy the token
+4. Start a chat with the new bot (send any message)
+5. Get the chat ID:
+   ```
+   https://api.telegram.org/bot[TOKEN]/getUpdates
+   ```
+   Look for `"chat":{"id":123456789}` — that number is the chat ID
+
+### WhatsApp (via Twilio — if client prefers WhatsApp)
+
+1. [twilio.com](https://twilio.com) → Console → Messaging → WhatsApp Sandbox
+2. Client texts "join [word]" to the sandbox number (one-time activation)
+3. Copy Account SID and Auth Token
+
+---
+
+## 3. Fill in the Context Templates
+
+### SOUL.md
+
+Usually needs one change only — replace `[STORE_NAME]`:
 ```bash
 nano ~/.openclaw/SOUL.md
 ```
 
-Replace `[STORE_NAME]` on line 3 with the actual store name.
+Only modify further if the client speaks another language or has a specific tone requirement.
 
----
+### USER.md
 
-## Step 2 — Fill in USER.md
-
-This is the most important file. Take your time with it.
+This is where you put everything about the client. Fill it in completely — the more detail, the better the agent.
 
 ```bash
 nano ~/.openclaw/USER.md
 ```
 
-Fill in every field. Use the onboarding form below to collect info from the client.
-
-### Onboarding Form (send this to client)
+Use this as your onboarding call checklist:
 
 ```
-1. Your name:
-2. Business name:
-3. Your location / timezone:
-4. Platform: Shopify / WooCommerce (circle one)
-5. Store URL:
-6. Main product category (e.g. leather bags, supplements, candles):
-7. Rough average order value (e.g. ~£65):
-8. Rough order volume per day (e.g. ~15 orders/day):
-9. Primary market (UK / USA / Europe / Global):
-10. Currency:
-11. Preferred contact channel: Telegram / WhatsApp / Slack (circle one)
-12. What time do you want your morning briefing? (e.g. 8:00 AM):
-13. Briefing style: bullet points / ultra-short summary (circle one):
-14. Alerts: only urgent / everything (circle one):
-15. High-value order threshold — flag any order above £___:
-16. Low stock threshold — alert when a product has fewer than ___ units:
-17. What's your biggest operational pain point right now?
-18. Is fulfilment in-house, 3PL, or dropship?
-19. What do you want the agent to handle? (tick all that apply)
-    [ ] Daily revenue briefings
-    [ ] Low stock alerts
-    [ ] Refund spike detection
-    [ ] High-value order flags
-    [ ] Klaviyo campaign summary
-    [ ] Ad spend monitoring
-    [ ] Customer support drafts
-    [ ] Ad-hoc questions
-```
+Name:
+Business name:
+Location / timezone:
+Platform: Shopify / WooCommerce
+Store URL:
+Product category (e.g. leather bags, supplements, candles):
+Average order value (~£___):
+Daily order volume (~___ orders/day):
+Primary market (UK / USA / Europe / Global):
+Currency:
 
----
+Preferred contact: Telegram / WhatsApp / Slack
+Morning briefing time (e.g. 8:00 AM):
+Briefing format: bullet points / ultra-short
+Alerts: only urgent / all flags
 
-## Step 3 — Get API Credentials
+High-value order threshold: £___
+Low stock threshold: ___ units
+Biggest pain point right now:
+Fulfilment: in-house / 3PL / dropship
 
-### Shopify
-
-1. Go to: `[store].myshopify.com/admin/apps/private`
-2. Click "Create a custom app"
-3. Name it: "OpenClaw Agent"
-4. Under Admin API access scopes, enable:
-   - `read_orders`
-   - `read_products`
-   - `read_inventory`
-   - `read_customers`
-5. Click "Install app"
-6. Copy the **Admin API access token** (shown once only)
-
-Credentials needed:
-```
-SHOPIFY_STORE_URL = your-store.myshopify.com
-SHOPIFY_ACCESS_TOKEN = shpat_xxxxx
+What to handle automatically:
+[ ] Daily revenue briefings
+[ ] Low stock alerts
+[ ] Refund spike detection
+[ ] High-value order flags
+[ ] Klaviyo weekly summary
+[ ] Ad-hoc questions
 ```
 
 ---
 
-### WooCommerce
-
-1. Go to: `WP Admin → WooCommerce → Settings → Advanced → REST API`
-2. Click "Add key"
-3. Description: "OpenClaw Agent"
-4. Permissions: **Read**
-5. Click "Generate API key"
-6. Copy the Consumer Key and Consumer Secret (shown once only)
-
-Credentials needed:
-```
-WOOCOMMERCE_URL = https://your-store.com
-WOOCOMMERCE_CONSUMER_KEY = ck_xxxxx
-WOOCOMMERCE_CONSUMER_SECRET = cs_xxxxx
-```
-
----
-
-### Klaviyo (optional)
-
-1. Go to: `Klaviyo → Account → Settings → API Keys`
-2. Click "Create Private API Key"
-3. Name: "OpenClaw Agent"
-4. Scopes: Read access to Campaigns and Metrics
-5. Copy the key
-
-Credentials needed:
-```
-KLAVIYO_API_KEY = pk_xxxxx
-```
-
----
-
-## Step 4 — Create Client .env File
+## 4. Test the Skills
 
 ```bash
-nano ~/openclaw-agent/.env
-```
-
-Paste and fill in:
-```env
-# Shopify
-SHOPIFY_STORE_URL=your-store.myshopify.com
-SHOPIFY_ACCESS_TOKEN=shpat_xxxxx
-
-# WooCommerce
-WOOCOMMERCE_URL=https://your-store.com
-WOOCOMMERCE_CONSUMER_KEY=ck_xxxxx
-WOOCOMMERCE_CONSUMER_SECRET=cs_xxxxx
-
-# Klaviyo
-KLAVIYO_API_KEY=pk_xxxxx
-
-# Thresholds (match what client said in onboarding form)
-HIGH_VALUE_ORDER_THRESHOLD=500
-LOW_STOCK_THRESHOLD=20
-REFUND_SPIKE_COUNT=5
-REFUND_SPIKE_WINDOW_HOURS=2
-```
-
----
-
-## Step 5 — Test the Skills
-
-```bash
-cd ~/openclaw-agent
+cd ~/openclaw/skills/ecommerce
 
 # Test whichever platform client uses
 node skills/shopify.js
-# or
-node skills/woocommerce.js
-# or
-node skills/klaviyo.js
 ```
 
-Expected output (Shopify):
+Expected output:
 ```
 🧪 Testing Shopify skill...
 
@@ -185,7 +167,7 @@ Expected output (Shopify):
    LotionLab — GBP
 
 2. Daily revenue:
-   GBP 1420.50 — 19 orders
+   GBP 1,420.50 — 19 orders
 
 3. Inventory check:
    84 SKUs — 3 below threshold
@@ -193,66 +175,47 @@ Expected output (Shopify):
 ✅ Shopify skill OK
 ```
 
-If you see errors, check:
-- Credentials in `.env` are correct
-- API key has the right permissions
-- Store URL has no trailing slash (Shopify) / no path (WooCommerce)
+If you see errors:
+- Check credentials in `.env` are correct (copy-paste issues are common)
+- Check API key has the right scopes (Shopify is strict about this)
+- Shopify URL: no `https://`, no trailing slash — just `brandname.myshopify.com`
+- WooCommerce URL: must include `https://`
 
 ---
 
-## Step 6 — Connect Delivery Channel
+## 5. Launch & Monitor
 
-### Telegram (recommended — easiest setup)
+```bash
+# Restart OpenClaw to pick up the new .env and context files
+pm2 restart openclaw
 
-1. Open Telegram and message `@BotFather`
-2. Send `/newbot`
-3. Name it e.g. "LotionLab Agent"
-4. Username e.g. `lotionlab_agent_bot`
-5. Copy the token BotFather gives you
-6. Start a chat with your new bot, then get the chat ID:
-   ```
-   https://api.telegram.org/bot[TOKEN]/getUpdates
-   ```
-7. Look for `"chat":{"id":123456789}` — that number is the chat ID
+# Check it's running
+pm2 status
 
-Add to `.env`:
-```env
-TELEGRAM_BOT_TOKEN=xxxxx
-TELEGRAM_CHAT_ID=123456789
-```
+# Watch logs live
+pm2 logs openclaw
 
-### WhatsApp (via Twilio)
-
-1. Create a Twilio account at [twilio.com](https://twilio.com)
-2. Enable WhatsApp Sandbox or buy a number
-3. Get Account SID and Auth Token from dashboard
-4. Note your Twilio WhatsApp number (format: `+14155238886` for sandbox)
-
-Add to `.env`:
-```env
-TWILIO_ACCOUNT_SID=ACxxxxx
-TWILIO_AUTH_TOKEN=xxxxx
-TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
-TWILIO_WHATSAPP_TO=whatsapp:+447700000000
+# Save so it survives reboots
+pm2 save
 ```
 
 ---
 
-## Step 7 — First Conversation Test
+## 6. Force a Test Briefing
 
-Start an OpenClaw chat:
+Start an OpenClaw chat and fire the first test:
 ```bash
 openclaw chat
 ```
 
 Send:
 ```
-Use the shopify skill to get today's revenue summary
+Use the shopify skill to get yesterday's revenue summary and give me a morning briefing
 ```
 
-OpenClaw should invoke `skills/shopify.js → getDailyRevenue()` and return a clean summary.
+The client should receive a message via their delivery channel within 30 seconds.
 
-Then test:
+Then test inventory:
 ```
 Check my Shopify inventory for anything below reorder level
 ```
@@ -261,22 +224,71 @@ If both work, the client is live.
 
 ---
 
-## Step 8 — Handover to Client
+## 7. Set Up the Daily Briefing Schedule
 
-Send the client:
-1. Their Telegram bot link (or WhatsApp number)
-2. A short voice note showing how to use it
-3. List of what the agent monitors and when briefings arrive
-4. One-pager: "Things your agent does automatically" + "Things you need to ask for"
+Still in `openclaw chat`, use the QMD skill to schedule recurring tasks:
+```
+Using the QMD skill, schedule a daily briefing every morning at 8am.
+It should pull getDailyRevenue, checkInventory, and checkRefunds,
+then send a summary to the client.
+```
+
+OpenClaw registers this and runs it automatically. No cron jobs to maintain.
 
 ---
 
-## Checklist — Client Live
+## 8. Handover Checklist (Before You Leave or Sign Off)
 
-- [ ] USER.md filled in completely
-- [ ] SOUL.md has correct store name
-- [ ] API credentials tested and working
-- [ ] Skills return correct data
-- [ ] Delivery channel connected and tested
-- [ ] PM2 running and surviving reboots
-- [ ] Client sent onboarding message and knows how to use it
+```
+✅ PM2 running and saved (pm2 status → "online")
+✅ PM2 set to start on boot (pm2 startup run)
+✅ Test briefing delivered to client's phone
+✅ Tailscale connected on both your machine and the Mac Mini
+✅ .env backed up to your password manager (Bitwarden / 1Password)
+✅ Claude session token backed up to your password manager
+✅ Client knows: "don't unplug it, don't close anything"
+✅ You can SSH in right now from your phone via Tailscale
+✅ Daily briefing scheduled and confirmed
+```
+
+---
+
+## 9. Your Remote Management Workflow (After Handover)
+
+```bash
+# SSH into client Mac Mini from anywhere
+ssh admin@100.x.x.x   # Tailscale IP
+
+# Check agent health
+pm2 status
+
+# Read recent logs
+pm2 logs openclaw --lines 50
+
+# Pull latest update and restart (repo is public — no auth needed)
+cd ~/openclaw/skills/ecommerce
+git pull
+pm2 restart openclaw
+
+# If something's broken at 2 AM — fix remotely, no site visit needed
+```
+
+---
+
+## 10. Cost Per Client (Monthly)
+
+| Item | Cost |
+|------|------|
+| Mac Mini (amortized over 3 years) | ~$20/mo |
+| Electricity (~10W device, always on) | ~$1/mo |
+| Claude Max account | $90/mo |
+| Twilio WhatsApp | ~$1–3/mo |
+| Tailscale | Free (up to 3 devices) |
+| Brave Search API | Free (2k queries/mo) |
+| **Total** | **~$115/mo** |
+
+You charge **$297/mo** Managed Care.
+**Margin per client: ~$180/mo** after costs.
+
+At 10 clients: ~$1,800/mo recurring. At 20: ~$3,600/mo.
+The Mac Mini pays for itself in under 2 months per client.

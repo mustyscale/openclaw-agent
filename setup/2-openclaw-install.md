@@ -1,26 +1,12 @@
-# Setup Guide 2 — OpenClaw Installation
+# Setup Guide 2 — Developer Environment & OpenClaw Install
 
-This guide installs the OpenClaw agent framework on the Mac Mini.
-Do this after completing Guide 1.
+Do this after Guide 1. You can do this remotely over SSH if the Mac Mini is already set up.
 
----
-
-## What OpenClaw Is
-
-OpenClaw is an autonomous agent framework that runs on top of Claude.
-It handles:
-- Conversations with Claude (using your Claude Pro/Max account token)
-- Persistent memory via SOUL.md, USER.md, MEMORY.md
-- Skill execution (our e-commerce tools plug in here)
-- Scheduling via QMD skill
-- Delivery (WhatsApp, Telegram, Slack) via built-in connectors
-
-You do NOT need an Anthropic API key. OpenClaw uses your Claude account token.
-This means the client pays ~$90/month for Claude Max — not per-token billing.
+Budget 30 minutes.
 
 ---
 
-## Step 1 — Install Homebrew
+## 1. Install Homebrew
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -34,21 +20,30 @@ source ~/.zshrc
 
 ---
 
-## Step 2 — Install Node.js
+## 2. Install Node.js, Git, and PM2
 
 ```bash
+# Node.js (LTS)
 brew install node
+
+# Git
+brew install git
+
+# PM2 — keeps OpenClaw running 24/7, restarts on crash
+npm install -g pm2
+pm2 startup   # run the sudo command it outputs — this makes PM2 start on boot
 ```
 
 Verify:
 ```bash
-node --version   # should be 18+
-npm --version
+node --version   # should be v18+
 ```
 
 ---
 
-## Step 3 — Install OpenClaw
+## 3. Install OpenClaw
+
+OpenClaw is the agent framework. It handles the Claude connection, scheduling, memory, and delivery. You don't rebuild any of that — you just install it.
 
 ```bash
 npm install -g openclaw
@@ -59,40 +54,37 @@ Verify:
 openclaw --version
 ```
 
+**Important:** OpenClaw uses your Claude account token — not an Anthropic API key.
+This means the client pays a flat $90/month for Claude Max. No per-token billing. No surprise invoices.
+
 ---
 
-## Step 4 — Get Claude Account Token
+## 4. Get the Claude Account Token
 
-The client needs a **Claude Pro or Claude Max** account ($20/month or $90/month).
-The $90/month Max plan is recommended — unlimited usage, no throttling.
+The client needs a **Claude Max** account ($90/month). Recommended over Pro — unlimited usage, no rate limiting.
 
-To get the token:
-1. Go to [claude.ai](https://claude.ai) and sign in
-2. Open DevTools (Cmd+Option+I)
-3. Go to Application → Cookies → `claude.ai`
+To get the session token:
+1. Go to [claude.ai](https://claude.ai) and sign in on the Mac Mini
+2. Open DevTools → `Cmd+Option+I`
+3. Go to **Application → Cookies → claude.ai**
 4. Find the cookie named `sessionKey`
-5. Copy the value — this is the token
+5. Copy the full value
 
-**Keep this secure. Treat it like a password.**
+**This is the only credential OpenClaw needs to talk to Claude. Treat it like a password. Store it in your password manager under this client.**
 
 ---
 
-## Step 5 — Configure OpenClaw
+## 5. Configure OpenClaw
 
-Create the OpenClaw config directory:
 ```bash
 mkdir -p ~/.openclaw
-```
-
-Create the config file:
-```bash
 nano ~/.openclaw/config.json
 ```
 
-Paste:
+Paste and fill in:
 ```json
 {
-  "claudeToken": "sk-ant-...",
+  "claudeToken": "sk-ant-sid03-...",
   "model": "claude-opus-4-5",
   "contextFiles": [
     "~/.openclaw/SOUL.md",
@@ -102,112 +94,127 @@ Paste:
 }
 ```
 
-Save: `Ctrl+X`, `Y`, `Enter`.
+Save: `Ctrl+X` → `Y` → `Enter`
 
 ---
 
-## Step 6 — Copy Context Templates
+## 6. Install the E-commerce Skills Pack
 
-From the openclaw-agent repo:
+This is our repo. Public — no authentication needed. Clone it once, shared across every client on this machine.
+
 ```bash
-cp ~/openclaw-agent/templates/SOUL.md ~/.openclaw/SOUL.md
-cp ~/openclaw-agent/templates/USER.md ~/.openclaw/USER.md
-cp ~/openclaw-agent/templates/MEMORY.md ~/.openclaw/MEMORY.md
+mkdir -p ~/openclaw/skills
+git clone https://github.com/mustyscale/openclaw-agent.git ~/openclaw/skills/ecommerce
+cd ~/openclaw/skills/ecommerce
+npm install
 ```
 
-Now fill in the placeholders in each file (see Guide 3 — Client Onboarding).
+Repo structure:
+```
+ecommerce/
+├── skills/
+│   ├── shopify.js        ← tools OpenClaw calls for Shopify data
+│   ├── woocommerce.js    ← tools for WooCommerce data
+│   └── klaviyo.js        ← tools for Klaviyo email data
+├── connectors/
+│   ├── shopify.js        ← raw Shopify API calls
+│   ├── woocommerce.js    ← raw WooCommerce API calls
+│   └── klaviyo.js        ← raw Klaviyo API calls
+├── templates/
+│   ├── SOUL.md           ← agent personality template
+│   ├── USER.md           ← store owner context template
+│   └── MEMORY.md         ← long-term memory template
+└── setup/                ← these guides
+```
 
 ---
 
-## Step 7 — Test OpenClaw
+## 7. Copy Context Templates
+
+```bash
+cp ~/openclaw/skills/ecommerce/templates/SOUL.md ~/.openclaw/SOUL.md
+cp ~/openclaw/skills/ecommerce/templates/USER.md ~/.openclaw/USER.md
+cp ~/openclaw/skills/ecommerce/templates/MEMORY.md ~/.openclaw/MEMORY.md
+```
+
+You'll fill these in during client onboarding (Guide 3).
+
+---
+
+## 8. Install Optional Skills
+
+**QMD** (persistent memory + scheduling — install this one):
+```bash
+npm install -g openclaw-qmd
+```
+This lets OpenClaw update MEMORY.md automatically and run recurring tasks (daily briefing, stock checks etc.) without you having to set up cron jobs.
+
+**Brave Search** (lets the agent search the web):
+```bash
+npm install -g openclaw-brave-search
+```
+Get a free API key at [brave.com/search/api](https://brave.com/search/api) — free tier is 2,000 queries/month.
+Add `BRAVE_API_KEY=your_key` to `~/.openclaw/.env`
+
+**Groq** (voice note transcription):
+```bash
+npm install -g openclaw-groq
+```
+Free API key at [console.groq.com](https://console.groq.com).
+Add `GROQ_API_KEY=your_key` to `~/.openclaw/.env`
+
+---
+
+## 9. Test OpenClaw
 
 ```bash
 openclaw chat
 ```
 
-You should see a prompt. Type:
+Type:
 ```
-What's today's date?
+What's today's date and what can you help me with?
 ```
 
-If you get a response, OpenClaw is working.
-
-Type `exit` to quit.
+If you get a sensible response, OpenClaw is working. Type `exit` to quit.
 
 ---
 
-## Step 8 — Install Optional Skills
+## 10. Run OpenClaw via PM2
 
-**Brave Search** (lets agent search the web):
+Create the startup script:
 ```bash
-npm install -g openclaw-brave-search
-export BRAVE_API_KEY=your_key_here
-```
-
-Get a free Brave Search API key at [brave.com/search/api](https://brave.com/search/api).
-Free tier: 2,000 queries/month. More than enough.
-
-**Groq Voice** (lets agent transcribe voice notes):
-```bash
-npm install -g openclaw-groq
-export GROQ_API_KEY=your_key_here
-```
-
-Get a free Groq API key at [console.groq.com](https://console.groq.com).
-
-**QMD** (persistent memory and scheduling — important):
-```bash
-npm install -g openclaw-qmd
-```
-
-This skill lets OpenClaw update MEMORY.md automatically and schedule recurring tasks.
-
----
-
-## Step 9 — Run OpenClaw in Background with PM2
-
-Install PM2:
-```bash
-npm install -g pm2
-```
-
-Create a startup script:
-```bash
-mkdir -p ~/openclaw-run
-nano ~/openclaw-run/start.sh
-```
-
-Paste:
-```bash
+mkdir -p ~/openclaw/run
+cat > ~/openclaw/run/start.sh << 'EOF'
 #!/bin/bash
 cd ~/.openclaw
 openclaw start --config config.json
-```
-
-Make executable:
-```bash
-chmod +x ~/openclaw-run/start.sh
+EOF
+chmod +x ~/openclaw/run/start.sh
 ```
 
 Start with PM2:
 ```bash
-pm2 start ~/openclaw-run/start.sh --name "openclaw-[clientname]"
+pm2 start ~/openclaw/run/start.sh --name "openclaw"
 pm2 save
-pm2 startup
 ```
 
-Run the `sudo env PATH=...` command PM2 outputs. This makes it survive reboots.
+Check it's running:
+```bash
+pm2 status
+pm2 logs openclaw --lines 20
+```
 
 ---
 
-## Checklist Before Moving to Step 3
+## Checklist Before Moving to Guide 3
 
-- [ ] Homebrew installed
-- [ ] Node.js 18+ installed
-- [ ] OpenClaw installed globally (`openclaw --version` works)
-- [ ] Claude account token obtained and saved to `config.json`
+- [ ] Homebrew, Node.js, Git, PM2 installed
+- [ ] `pm2 startup` run — PM2 survives reboots
+- [ ] OpenClaw installed (`openclaw --version` works)
+- [ ] Claude Max account signed in, session token in `config.json`
+- [ ] Skills repo cloned to `~/openclaw/skills/ecommerce`
 - [ ] Context templates copied to `~/.openclaw/`
-- [ ] `openclaw chat` responds correctly
-- [ ] Brave Search API key set (optional)
 - [ ] QMD skill installed
-- [ ] PM2 running OpenClaw, survives reboot
+- [ ] `openclaw chat` responds correctly
+- [ ] PM2 running OpenClaw and saved
