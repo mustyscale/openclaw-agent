@@ -1,0 +1,26 @@
+{
+  "name": "openclaw-agent",
+  "version": "1.0.0",
+  "description": "OpenClaw — AI agent for e-commerce stores. Monitors orders, inventory, support & marketing 24/7.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test:briefing": "node jobs/daily-briefing.js --test",
+    "test:orders": "node jobs/order-scan.js --test",
+    "test:stock": "node jobs/stock-monitor.js --test",
+    "test:refunds": "node jobs/refund-monitor.js --test"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3",
+    "twilio": "^5.2.3",
+    "node-telegram-bot-api": "^0.66.0",
+    "dayjs": "^1.11.11"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
